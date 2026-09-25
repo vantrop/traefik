@@ -302,6 +302,7 @@ The `clientAuth.clientAuthType` option governs the behaviour as follows:
 | <a id="opt-RequireAnyClientCert" href="#opt-RequireAnyClientCert" title="#opt-RequireAnyClientCert">`RequireAnyClientCert`</a> | Requires a certificate but does not verify if it is signed by a CA listed in `clientAuth.caFiles` or in `clientAuth.secretNames`. |
 | <a id="opt-VerifyClientCertIfGiven" href="#opt-VerifyClientCertIfGiven" title="#opt-VerifyClientCertIfGiven">`VerifyClientCertIfGiven`</a> | If a certificate is provided, verifies if it is signed by a CA listed in `clientAuth.caFiles` or in `clientAuth.secretNames`. Otherwise proceeds without any certificate. |
 | <a id="opt-RequireAndVerifyClientCert" href="#opt-RequireAndVerifyClientCert" title="#opt-RequireAndVerifyClientCert">`RequireAndVerifyClientCert`</a> |  requires a certificate, which must be signed by a CA listed in `clientAuth.caFiles` or in `clientAuth.secretNames`. |
+| <a id="opt-RequireAndVerifyClientCertWithCRLs" href="#opt-RequireAndVerifyClientCert" title="#opt-RequireAndVerifyClientCertWithCRLs">`RequireAndVerifyClientCertWithExpiry`</a> |  requires a certificate, which must be signed by a CA listed in `clientAuth.caFiles` or in `clientAuth.secretNames`.<br /> Provided certificate must be valid according to it's CRL spec. More about CRL handling [here](#expiry-check) |
 
 ```yaml tab="Structured (YAML)"
 # Dynamic configuration
@@ -315,6 +316,85 @@ tls:
           - tests/clientca1.crt
           - tests/clientca2.crt
         clientAuthType: RequireAndVerifyClientCert
+```
+
+```toml tab="Structured (TOML)"
+# Dynamic configuration
+
+[tls.options]
+  [tls.options.default]
+    [tls.options.default.clientAuth]
+      # in PEM format. each file can contain multiple CAs.
+      caFiles = ["tests/clientca1.crt", "tests/clientca2.crt"]
+      clientAuthType = "RequireAndVerifyClientCert"
+```
+
+#### Expiry Validation
+
+Traefik supports CRL handling through the `clientAuth.expiry.crl` section.
+There is multiple ways to load and handle CRLs.
+
+!!! important "Performance impact"
+
+  CRL validation is handled after client certificate validation and increase computational load on each request.
+  You should be very carefull on wich routes will use this option as using it everywhere may increase latency significantly and/or lead to OOM issues.
+  No matter how CRLs are loaded they will be loaded in Traefik memory, having very large CRL files and/or a large number of files may lead to significant memory usage increase.
+
+This section of configuration requires `clientAuth.clientAuthType = "RequireAndVerifyClientCertWithExpiry"` to be effective.
+
+| Option    |  Operation  |
+| --------- | ----------- |
+| <a id="opt-expiry-crl-mode" href="#opt-expiry-crlmode" title="#opt-expiry-crlmode">`clientAuth.expiry.crl.mode`</a> | Defines how Traefik will handle client certificate CRL validation.<br /> More info [here](crl-validation-behavior) |
+| <a id="opt-expiry-crl-load" href="#opt-expiry-crl-load" title="#opt-expiry-crl-load">`clientAuth.expiry.crl.loadMode`</a> | Defines how Traefik will handle reference files loading.<br /> More info [here](crl-files-loading) |
+| <a id="opt-expiry-crl-load-files-location" href="#opt-expiry-crl-load-files-location" title="#opt-expiry-crl-load-files-location">`clientAuth.expiry.crl.filesLocation`</a> | Defines from wich path Traefik will load CRL files when CRLs are loaded through `file` mode. Files must be valid CRL files.<br /> More info [here](crl-files-loading) |
+| <a id="opt-expiry-crl-load-http-expiration" href="#opt-expiry-crl-load-http-expiration" title="#opt-expiry-crl-load-http-expiration">`clientAuth.expiry.crl.httpExpirationStrategy`</a> | Defines how Traefik will handle expired CRLs when they are loaded through `HTTP`.<br /> More info [here](crl-files-loading) |
+
+##### CRL validation behavior
+
+Traefik behavior validation behavior can be controled via `clientAuth.expiry.crl.mode`:
+
+| Mode    |  Description                                                  |
+| ------- | ------------------------------------------------------------- |
+| noop    | No operation, will not check certificate sfor CRL attributes. |
+| lax     | Will check certificates for CRL attribute and enforce when attribute is present. **Will not** enforce if a certificate has no CRL attribute. Traefik will check for each certificates in the verified chain if they are expired against their CRL file and apply this validation logic. |
+| enforce | Will check certificates for CRL attribute, enforce when attribute is present, reject if attribute is not present. Traefik will check for each certificates in the verified chain if they are expired against their CRL file and apply this validation logic. |
+
+##### CRL file loading
+
+Traefik supports two CRL loading methods `file` and `HTTP`.
+
+| Load Mode |  Description                        |
+| --------  | ----------------------------------- |
+| `file`      | This load mechanism relies on CRL files loaded through a file path accessible by traefik. This mean you are responsible to load CRL files in Traefik running environment and maintain them up to date. This mode does not check for **CRL Expiry** and trusts the provided files without checking their signature and expiry against the emitting CA.  |
+| `HTTP`      | This load mechanism relies on loading CRL files through HTTP calls using the ditribution point provided by the verified client certificate. Traefik when loading a CRL this way will check CRL file signature and expiry date. CRL files are loaded on the fly with the first request made referencing the CRL file in certificate chain. |
+
+When using `HTTP` loading, you need to select an expiration handling strategy.
+
+| Crl Expiration Strategy    |  Description                                                  |
+| -------------------------- | ------------------------------------------------------------- |
+| `open`         | When a CRL file expires, Traefik will continue to serve HTTP routes whilst loading a new valid CRL file in the background. |
+| `failedClosed` | When a CRL file expires, Traefik will, on the first request referencing this file, lock all requests until a new valid CRL file is loaded. This option ensures all requests uses a non expired client certificate but can momentarily **significantly** increase request latency and Traefik resource usage. If a CRL file download fails, Traefik will deny client request with a HTTP 401 and try to reload the file on the next request acquiring a lock. |
+
+
+```yaml tab="Structured (YAML)"
+# Dynamic configuration
+
+tls:
+  options:
+    default:
+      clientAuth:
+        # in PEM format. each file can contain multiple CAs.
+        caFiles:
+          - tests/clientca1.crt
+          - tests/clientca2.crt
+        clientAuthType: RequireAndVerifyClientCert
+        expiry:
+          crl:
+            mode: enforce
+            providerwhitelist:
+              - mycrlendpoint.crt
+              - myothercrlendpoint.crt
+
 ```
 
 ```toml tab="Structured (TOML)"

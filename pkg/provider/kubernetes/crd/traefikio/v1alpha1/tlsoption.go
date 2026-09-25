@@ -60,7 +60,7 @@ type ClientAuth struct {
 	// SecretNames defines the names of the referenced Kubernetes Secret storing certificate details.
 	SecretNames []string `json:"secretNames,omitempty"`
 	// ClientAuthType defines the client authentication type to apply.
-	// +kubebuilder:validation:Enum=NoClientCert;RequestClientCert;RequireAnyClientCert;VerifyClientCertIfGiven;RequireAndVerifyClientCert
+	// +kubebuilder:validation:Enum=NoClientCert;RequestClientCert;RequireAnyClientCert;VerifyClientCertIfGiven;RequireAndVerifyClientCert;RequireAndVerifyClientCertWithExpiry
 	ClientAuthType string `json:"clientAuthType,omitempty"`
 }
 

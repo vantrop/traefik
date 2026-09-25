@@ -190,9 +190,18 @@ func setupServer(staticConfiguration *static.Configuration) (*server.Server, err
 		return nil, err
 	}
 
+	// CRL
+
+	// init a global CRL manager
+	var crlManager *traefiktls.CRLManager
+	traefiktls.NewCRLManager(ctx, traefiktls.CRLManagerConfig{
+		FileCRLs:       staticConfiguration.TLS.CRLFiles,
+		ReloadInterval: time.Duration(staticConfiguration.TLS.CRLReloadInterval),
+	})
+
 	// ACME
 
-	tlsManager := traefiktls.NewManager(staticConfiguration.OCSP)
+	tlsManager := traefiktls.NewManager(staticConfiguration.OCSP, crlManager)
 	routinesPool.GoCtx(tlsManager.Run)
 
 	httpChallengeProvider := acme.NewChallengeHTTP()

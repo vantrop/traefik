@@ -1,6 +1,7 @@
 package tls
 
 import (
+	"bytes"
 	"crypto/x509"
 	"fmt"
 	"io"
@@ -148,6 +149,8 @@ func (l *crlHTTPLoader) downloadCRL() ([]byte, error) {
 		return nil, fmt.Errorf("unexpected HTTP status %d", resp.StatusCode)
 	}
 
+	// FIXME add a config option limiting crl size
+	//io.LimitReader(resp.Body,10)
 	return io.ReadAll(resp.Body)
 }
 
@@ -158,7 +161,7 @@ func (l *crlHTTPLoader) verifyCRLSignature(crl *x509.RevocationList) error {
 	}
 
 	// Issuer declared in CRL must be certificate emitter
-	if crl.Issuer.String() != l.issuer.Subject.String() {
+	if bytes.Equal(crl.RawIssuer, l.issuer.RawSubject) {
 		return fmt.Errorf("CRL issuer mismatch: got %q, expected %q",
 			crl.Issuer.String(), l.issuer.Subject.String())
 	}

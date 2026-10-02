@@ -204,8 +204,8 @@ func (m *CRLManager) Prune(activeOptionsNames map[string]struct{}) {
 	}
 }
 
-// snapshotProvider builds the crlSnaphotProvider matching the configured expiration strategy.
-func (m *CRLManager) snapshotProvider(cfg CRLHTTP, holder *crlHTTPClientHolder) (crlSnaphotProvider, error) {
+// snapshotProvider builds the crlSnapshotProvider matching the configured expiration strategy.
+func (m *CRLManager) snapshotProvider(cfg CRLHTTP, holder *crlHTTPClientHolder) (crlSnapshotProvider, error) {
 	switch cfg.ExpirationStrategy {
 	case "", CRLExpirationOpen:
 		return &openSnaphotProvider{clientHolder: holder}, nil
@@ -218,7 +218,7 @@ func (m *CRLManager) snapshotProvider(cfg CRLHTTP, holder *crlHTTPClientHolder) 
 
 // buildEnforcerFromStore instantiates the CRLEnforcer implementation matching cfg.Mode,
 // wiring it to an existing store/snapshot provider rather than owning its own.
-func buildEnforcerFromStore(cfg CRL, store, global *CRLStore, snapProvider crlSnaphotProvider) CRLEnforcer {
+func buildEnforcerFromStore(cfg CRL, store, global *CRLStore, snapProvider crlSnapshotProvider) CRLEnforcer {
 	switch cfg.Mode {
 	case CRLLax:
 		return &crlEnforcerLax{

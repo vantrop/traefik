@@ -20,6 +20,9 @@ Traefik lets you configure a global, file based Certificate Revocation List (CRL
 
     When a certificate's CRL distribution point is covered by this global store, it always takes precedence over the per-TLS-Options, HTTP based CRL loading mechanism described in the [TLS Options documentation](../../routing/providers/tls-options.md#expiry-validation), and bypasses its allow-list.
 
+!!! important "Expiration strategy"
+    File Based CRLs provided by this way will always be used in CRL revocation checks. It is your responsibility to load/reload a valid CRL for Traefik to consume.
+
 ```yaml tab="File (YAML)"
 ## Install configuration
 tls:

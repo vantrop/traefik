@@ -272,6 +272,8 @@ func (s *CRLStore) reload() {
 	})
 }
 
+//FIXME consider another file watcher mechnisme for kube envs ?
+
 // Watch crl files for a store.
 //
 // CRL entries will be individually synchronised according to fs events changes.

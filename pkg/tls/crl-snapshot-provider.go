@@ -7,7 +7,7 @@ import (
 	"github.com/rs/zerolog/log"
 )
 
-type crlSnaphotProvider interface {
+type crlSnapshotProvider interface {
 	// get a snapshot from a store for a DP using it's issuer
 	getVerifiedSnapshot(store *CRLStore, distributionPoint string, issuer *x509.Certificate) (crlSnapshot, error)
 }

@@ -2,9 +2,12 @@ package tls
 
 import (
 	"crypto/x509"
+	"errors"
 	"fmt"
 	"slices"
 )
+
+//FIXME refactor to merge crlEnforcerLax and Strict
 
 // Enforce CRL validation against certificates
 
@@ -37,11 +40,14 @@ type crlEnforcerLax struct {
 	store *CRLStore
 	// global store with file based CRLs
 	globalStore     *CRLStore
-	snaphotProvider crlSnaphotProvider
+	snaphotProvider crlSnapshotProvider
 }
 
 // Unexpired certificates and certificates without crl definitions are allowed
 func (e *crlEnforcerLax) IsChainAllowed(chain []*x509.Certificate) (bool, error) {
+	if len(chain) == 0 {
+		return true, nil
+	}
 	for i := 0; i < len(chain)-1; i++ {
 		cert := chain[i]
 		issuer := chain[i+1] // emitter, validated by TLS handshake
@@ -64,6 +70,7 @@ func (e *crlEnforcerLax) isCertAllowedAgainstIssuer(crt, issuer *x509.Certificat
 		return true, nil
 	}
 
+	//FIXME Multiple CRLDistributionPoints treated as redundant, "first success wins" 	RFC 5280 allows CAs to partition revocation data across multiple distribution points (via the Issuing Distribution Point extension), not just mirror the same list. The current logic stops at the first DP that loads successfully, regardless of whether it's a full list or only a partition. If a target CA partitions by DP, a certificate revoked only in a different partition than the one successfully fetched could be incorrectly treated as valid. Worth either documenting this assumption explicitly ("DPs are treated as redundant mirrors, not partitions") or checking all reachable DPs before concluding "not revoked".
 	var lastErr error
 	for _, dp := range crt.CRLDistributionPoints {
 		// check presence in global store first
@@ -105,12 +112,15 @@ type crlEnforcerStrict struct {
 	store *CRLStore
 	// global store with file based CRLs
 	globalStore     *CRLStore
-	snaphotProvider crlSnaphotProvider
+	snaphotProvider crlSnapshotProvider
 }
 
 // Unexpired certificates according to CRL definitions are allowed
 // CRL attributes are mandatory on certificates
 func (e *crlEnforcerStrict) IsChainAllowed(chain []*x509.Certificate) (bool, error) {
+	if len(chain) == 0 {
+		return false, nil
+	}
 	for i := 0; i < len(chain)-1; i++ {
 		cert := chain[i]
 		issuer := chain[i+1] // emitter, validated by TLS handshake
@@ -128,6 +138,11 @@ func (e *crlEnforcerStrict) IsChainAllowed(chain []*x509.Certificate) (bool, err
 
 // Check wether a single certificate is allowed
 func (e *crlEnforcerStrict) isCertAllowedAgainstIssuer(crt, issuer *x509.Certificate) (bool, error) {
+	if len(crt.CRLDistributionPoints) == 0 {
+		// Lax, no crl distribution point is allowed
+		return false, errors.New("strict mode requires a CRL distribution point, none present on certificate")
+	}
+
 	var lastErr error
 	for _, dp := range crt.CRLDistributionPoints {
 		// check presence in global store first
